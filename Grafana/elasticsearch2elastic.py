@@ -15,7 +15,6 @@ interval = int(os.environ.get('ES_METRICS_INTERVAL', '60'))
 elasticIndex = os.environ.get('ES_METRICS_INDEX_NAME', 'elasticsearch_metrics')
 elasticMonitoringCluster = os.environ.get('ES_METRICS_MONITORING_CLUSTER_URL', 'http://server2:9200')
 
-
 def fetch_clusterhealth():
     try:
         utc_datetime = datetime.datetime.utcnow()
@@ -82,10 +81,23 @@ def fetch_indexstats(clusterName):
 
 
 def post_data(data):
+    global elasticMonitoringCluster
     utc_datetime = datetime.datetime.utcnow()
+    auth_part = None
+    if '@' in elasticMonitoringCluster:
+        auth_part = elasticMonitoringCluster.split('@')[0].split('://')[1]
+        elasticMonitoringCluster = elasticMonitoringCluster.replace(auth_part+'@', '')
     url_parameters = {'cluster': elasticMonitoringCluster, 'index': elasticIndex,
         'index_period': utc_datetime.strftime("%Y.%m.%d"), }
     url = "%(cluster)s/%(index)s-%(index_period)s/message" % url_parameters
+    if auth_part:
+        auth_handler = urllib2.HTTPBasicAuthHandler()
+        auth_handler.add_password(realm='security',
+                                  uri=url,
+                                  user=auth_part.split(':',1)[0],
+                                  passwd=auth_part.split(':',1)[1])
+        opener = urllib2.build_opener(auth_handler)
+        urllib2.install_opener(opener)
     headers = {'content-type': 'application/json'}
     try:
         req = urllib2.Request(url, headers=headers, data=json.dumps(data))
